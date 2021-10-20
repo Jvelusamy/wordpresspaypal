@@ -1,0 +1,113 @@
+<html>
+<head>
+<link rel='stylesheet' href='sheet.css' />
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+</head>
+
+<?php
+@session_start();
+$token = "";
+/*
+	get access_token
+*/
+$clientId = "Acn4Wk17XOPukvUa6Cxu7aB667o4cdzPUML4o2spELRBI0Xhfbx1VddgIBreKZRI_q6d7mCqAAnsjZX6";
+$secret = "EHORmn3y3dUgHiKoZmKfPwVCi1Y40TxGtmUeXzpfwU6H91B0aFlcB_EnAPV_tCKm-8vC2HQcpsjFcwu4";
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/oauth2/token");
+curl_setopt($ch, CURLOPT_HEADER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSLVERSION , 6); //NEW ADDITION
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); 
+curl_setopt($ch, CURLOPT_USERPWD, $clientId.":".$secret);
+curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
+$result = curl_exec($ch);
+
+if(empty($result))die("Error: No response.");
+else
+{
+    $json = json_decode($result);
+	$token = $json->access_token;
+	$_SESSION['token'] = $token; 
+    //print_r($json->access_token);
+	//echo $token;
+}
+curl_close($ch); //THIS CODE IS NOW WORKING!
+
+/*
+	Create order
+*/
+if($token != "")
+{
+$ch1 = curl_init();
+curl_setopt($ch1, CURLOPT_URL, 'https://api.sandbox.paypal.com/v2/checkout/orders');
+curl_setopt($ch1, CURLOPT_RETURNTRANSFER, 1);
+curl_setopt($ch1, CURLOPT_POST, 1);
+curl_setopt($ch1, CURLOPT_POSTFIELDS, "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [\n    {\n      \"reference_id\": \"PUHF\",\n      \"amount\": {\n        \"currency_code\": \"USD\",\n        \"value\": \"1500.00\"\n      }\n    }\n  ],\n  \"application_context\": {\n    \"return_url\": \"http://localhost/paypal.php\",\n    \"cancel_url\": \"http://localhost/paypal.php\"\n  }\n}");
+
+$headers = array();
+$headers[] = 'Accept: application/json';
+$headers[] = 'Accept-Language: en_US';
+$headers[] = 'Authorization: Bearer '.$token;
+$headers[] = 'Content-Type: application/json';
+curl_setopt($ch1, CURLOPT_HTTPHEADER, $headers);
+$result = curl_exec($ch1);
+if (curl_errno($ch1)) {
+    echo 'Error:' . curl_error($ch1);
+}
+
+$json = json_decode($result);
+curl_close($ch1);
+//print_r($json);
+$pgurl = "";
+            foreach($json->links as $link)
+            {
+			    //echo "\t{$link->rel}: {$link->href}\tCall Type: {$link->method}\n";
+				
+				if($link->rel =="capture"){ 
+					$_SESSION['captureurl'] = $link->href; 
+				}else if($link->rel =="approve"){ 
+					$pgurl = $link->href;
+				echo '<img src="cam.jpg" width="100" height="100"><br><label>Price: $1500/-</label><br>';
+				echo "<script> function showbtn(){ window.location.href= '$pgurl'; } </script>";
+				echo "<button class='btn' onclick='showbtn()'>PayPal</button>";
+				}
+            }
+}
+//Response handling
+if(isset($_GET['PayerID']))
+{ 
+
+echo "<br><br>";
+print_r($_GET); 
+//echo $_SESSION['captureurl'].$_SESSION['token']; 
+
+
+$headers = array();
+$headers[] = 'Accept: application/json';
+$headers[] = 'Accept-Language: en_US';
+$headers[] = 'Authorization: Bearer '.$_SESSION['token'];
+$headers[] = 'Content-Type: application/json';
+
+$ch2 = curl_init();
+curl_setopt($ch2, CURLOPT_URL, $_SESSION['captureurl']);
+curl_setopt($ch2, CURLOPT_RETURNTRANSFER, 1);
+curl_setopt($ch2, CURLOPT_POST, 1);
+curl_setopt($ch2, CURLOPT_HTTPHEADER, $headers);
+$result1 = curl_exec($ch2);
+
+if (curl_errno($ch2)) {
+    echo 'Error:' . curl_error($ch2);
+}
+$json1 = json_decode($result1);
+//print_r($json1->details);
+foreach($json1->details as $detail){
+	echo "<br>status : ".$detail->issue;
+}
+curl_close($ch2);
+//print_r($json1);
+
+}
+?>
+</html>
